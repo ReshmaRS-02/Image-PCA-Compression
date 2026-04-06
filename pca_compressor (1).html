@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PCA Compressor</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#0a0a0f;
+  --paper:#f5f3ee;
+  --paper2:#eeebe3;
+  --paper3:#e5e0d5;
+  --accent:#c8401a;
+  --accent2:#1a6bc8;
+  --accent3:#1a8c5a;
+  --gold:#b8860b;
+  --border:#c8c0b0;
+  --muted:#7a7060;
+  --mono:'DM Mono',monospace;
+  --display:'Syne',sans-serif;
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--mono);
+  background:var(--paper);
+  color:var(--ink);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+/* ── Grid texture overlay ── */
+body::before{
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image:
+    linear-gradient(var(--border) 1px,transparent 1px),
+    linear-gradient(90deg,var(--border) 1px,transparent 1px);
+  background-size:40px 40px;
+  opacity:0.18;
+  pointer-events:none;
+  z-index:0;
+}
+
+/* ── Header ── */
+header{
+  position:relative;z-index:10;
+  border-bottom:2px solid var(--ink);
+  padding:1.25rem 2.5rem;
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--paper);
+}
+.logo-block{display:flex;align-items:center;gap:1rem}
+.logo-sq{
+  width:42px;height:42px;
+  background:var(--ink);
+  display:grid;place-items:center;
+  font-family:var(--display);
+  color:var(--paper);
+  font-size:1.1rem;font-weight:800;
+  letter-spacing:-0.05em;
+}
+.logo-text h1{
+  font-family:var(--display);
+  font-size:1.05rem;font-weight:700;
+  letter-spacing:0.05em;
+  text-transform:uppercase;
+}
+.logo-text p{font-size:0.65rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;margin-top:1px}
+.header-tag{
+  font-size:0.62rem;letter-spacing:0.14em;text-transform:uppercase;
+  border:1.5px solid var(--ink);padding:5px 14px;
+  font-family:var(--display);font-weight:600;
+}
+
+/* ── Main layout ── */
+.layout{
+  position:relative;z-index:1;
+  display:grid;
+  grid-template-columns:380px 1fr;
+  min-height:calc(100vh - 70px);
+}
+
+/* ── Sidebar ── */
+aside{
+  border-right:2px solid var(--ink);
+  background:var(--paper);
+  display:flex;flex-direction:column;
+}
+.aside-section{
+  padding:1.5rem;
+  border-bottom:1.5px solid var(--border);
+}
+.section-eyebrow{
+  font-size:0.6rem;letter-spacing:0.18em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:1rem;
+  display:flex;align-items:center;gap:8px;
+}
+.section-eyebrow::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ── Upload zone ── */
+.upload-zone{
+  border:2px dashed var(--border);
+  padding:2.5rem 1.5rem;
+  text-align:center;
+  cursor:pointer;
+  transition:all 0.2s;
+  background:var(--paper2);
+  position:relative;
+  overflow:hidden;
+}
+.upload-zone:hover,.upload-zone.drag{
+  border-color:var(--accent);
+  background:rgba(200,64,26,0.04);
+}
+.upload-zone.drag{transform:scale(1.01)}
+.upload-icon{
+  width:48px;height:48px;
+  border:2px solid var(--ink);
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 1rem;
+  font-size:1.4rem;
+}
+.upload-zone strong{
+  font-family:var(--display);font-size:0.88rem;font-weight:700;
+  display:block;margin-bottom:4px;letter-spacing:0.03em;
+}
+.upload-zone span{font-size:0.72rem;color:var(--muted)}
+#fileInput{display:none}
+
+/* ── Thumb strip ── */
+.thumb-strip{
+  display:flex;gap:6px;margin-top:1rem;flex-wrap:wrap;
+}
+.thumb{
+  width:52px;height:52px;
+  border:1.5px solid var(--border);
+  cursor:pointer;
+  overflow:hidden;
+  transition:border-color 0.15s;
+  flex-shrink:0;
+}
+.thumb:hover,.thumb.active{border-color:var(--accent);border-width:2px}
+.thumb img{width:100%;height:100%;object-fit:cover}
+
+/* ── Slider ── */
+.slider-wrap{display:flex;flex-direction:column;gap:0.6rem}
+.slider-row{display:flex;justify-content:space-between;align-items:center}
+.slider-label{font-size:0.78rem;color:var(--muted)}
+.k-badge{
+  font-family:var(--display);font-size:1rem;font-weight:700;
+  color:var(--accent);
+  min-width:32px;text-align:right;
+}
+input[type=range]{
+  width:100%;
+  -webkit-appearance:none;
+  height:3px;background:var(--border);cursor:pointer;
+  margin:4px 0;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:16px;height:16px;
+  background:var(--ink);border-radius:50%;
+  cursor:pointer;transition:transform 0.1s;
+}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.3)}
+
+/* ── Variance bar ── */
+.var-bar-bg{height:4px;background:var(--paper3);margin-top:6px}
+.var-bar-fill{height:100%;background:var(--accent);transition:width 0.4s}
+.var-label{display:flex;justify-content:space-between;margin-top:4px;font-size:0.65rem;color:var(--muted)}
+
+/* ── CTA Button ── */
+.run-btn{
+  width:100%;
+  padding:1rem;
+  background:var(--ink);
+  color:var(--paper);
+  border:none;cursor:pointer;
+  font-family:var(--display);
+  font-size:0.82rem;font-weight:700;
+  letter-spacing:0.1em;text-transform:uppercase;
+  transition:background 0.15s,transform 0.1s;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+}
+.run-btn:hover:not(:disabled){background:var(--accent)}
+.run-btn:active:not(:disabled){transform:scale(0.98)}
+.run-btn:disabled{opacity:0.4;cursor:not-allowed}
+.run-btn .spinner{
+  width:14px;height:14px;
+  border:2px solid rgba(245,243,238,0.3);
+  border-top-color:var(--paper);
+  border-radius:50%;
+  animation:spin 0.7s linear infinite;
+  display:none;
+}
+.run-btn.loading .spinner{display:block}
+.run-btn.loading .btn-text{opacity:0.6}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Stats grid sidebar ── */
+.mini-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mini-stat{
+  background:var(--paper2);
+  border:1.5px solid var(--border);
+  padding:10px;
+}
+.mini-stat-label{font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.mini-stat-val{
+  font-family:var(--display);
+  font-size:1.1rem;font-weight:700;
+}
+.val-green{color:var(--accent3)}
+.val-red{color:var(--accent)}
+.val-blue{color:var(--accent2)}
+.val-gold{color:var(--gold)}
+
+/* ── Progress ── */
+.progress-wrap{
+  padding:1rem 1.5rem;
+  border-bottom:1.5px solid var(--border);
+  display:none;
+}
+.progress-wrap.show{display:block}
+.prog-label{font-size:0.7rem;color:var(--muted);margin-bottom:6px}
+.prog-bg{height:3px;background:var(--paper3)}
+.prog-fill{height:100%;background:var(--accent);transition:width 0.25s;width:0%}
+
+/* ── Content area ── */
+.content{
+  display:flex;flex-direction:column;
+  overflow-y:auto;
+}
+
+/* ── Empty state ── */
+.empty-state{
+  flex:1;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:1rem;padding:4rem;
+  min-height:400px;
+}
+.empty-cross{
+  width:72px;height:72px;
+  position:relative;
+  opacity:0.15;
+}
+.empty-cross::before,.empty-cross::after{
+  content:'';position:absolute;
+  background:var(--ink);
+}
+.empty-cross::before{width:4px;height:100%;left:50%;transform:translateX(-50%)}
+.empty-cross::after{height:4px;width:100%;top:50%;transform:translateY(-50%)}
+.empty-state h2{
+  font-family:var(--display);
+  font-size:1.2rem;font-weight:700;
+  letter-spacing:0.03em;color:var(--muted);
+  text-align:center;
+}
+.empty-state p{font-size:0.78rem;color:var(--muted);text-align:center;max-width:300px;line-height:1.8}
+
+/* ── Result panels ── */
+.result-area{display:flex;flex-direction:column;gap:0;flex:1}
+
+/* Image comparison strip */
+.img-compare-strip{
+  border-bottom:2px solid var(--ink);
+  display:grid;grid-template-columns:1fr 1fr 1fr;
+}
+.img-panel{
+  border-right:1.5px solid var(--border);
+  display:flex;flex-direction:column;
+}
+.img-panel:last-child{border-right:none}
+.img-panel-header{
+  padding:10px 16px;
+  border-bottom:1.5px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.img-panel-title{font-size:0.62rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted)}
+.img-tag{
+  font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;
+  padding:3px 8px;border:1px solid;font-weight:500;
+}
+.tag-orig{border-color:var(--accent3);color:var(--accent3)}
+.tag-comp{border-color:var(--accent2);color:var(--accent2)}
+.tag-diff{border-color:var(--accent);color:var(--accent)}
+.img-canvas-wrap{
+  flex:1;
+  display:flex;align-items:center;justify-content:center;
+  padding:1rem;background:var(--paper2);
+  min-height:220px;
+}
+.img-canvas-wrap canvas{
+  max-width:100%;
+  max-height:260px;
+  width:auto;
+  height:auto;
+  display:block;
+  image-rendering:auto;
+  border:1px solid var(--border);
+}
+
+/* ── Metrics dashboard ── */
+.metrics-dashboard{
+  padding:2rem 2.5rem;
+  border-bottom:2px solid var(--ink);
+}
+.metrics-headline{
+  font-family:var(--display);
+  font-size:1.4rem;font-weight:800;
+  letter-spacing:0.02em;
+  margin-bottom:0.3rem;
+}
+.metrics-sub{font-size:0.72rem;color:var(--muted);margin-bottom:2rem}
+
+.metrics-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:1px;
+  background:var(--ink);
+  border:2px solid var(--ink);
+  margin-bottom:2rem;
+}
+.metric-card{
+  background:var(--paper);
+  padding:1.5rem 1.25rem;
+  position:relative;
+  overflow:hidden;
+  transition:background 0.15s;
+}
+.metric-card:hover{background:var(--paper2)}
+.metric-card::before{
+  content:'';
+  position:absolute;top:0;left:0;right:0;
+  height:3px;
+}
+.mc-psnr::before{background:var(--accent3)}
+.mc-mse::before{background:var(--accent)}
+.mc-ssim::before{background:var(--accent2)}
+.mc-ratio::before{background:var(--gold)}
+.metric-label{font-size:0.6rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.metric-value{
+  font-family:var(--display);
+  font-size:2rem;font-weight:800;
+  letter-spacing:-0.03em;
+  line-height:1;
+  margin-bottom:4px;
+}
+.mv-green{color:var(--accent3)}
+.mv-red{color:var(--accent)}
+.mv-blue{color:var(--accent2)}
+.mv-gold{color:var(--gold)}
+.metric-unit{font-size:0.65rem;color:var(--muted);margin-bottom:8px}
+.metric-bar-bg{height:2px;background:var(--paper3)}
+.metric-bar-fill{height:100%;transition:width 0.6s cubic-bezier(.4,0,.2,1)}
+.mfill-green{background:var(--accent3)}
+.mfill-red{background:var(--accent)}
+.mfill-blue{background:var(--accent2)}
+.mfill-gold{background:var(--gold)}
+.metric-verdict{font-size:0.62rem;color:var(--muted);margin-top:4px;font-style:italic}
+
+/* ── SVD Spectrum chart ── */
+.charts-row{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:1px;background:var(--border);
+  border:2px solid var(--ink);
+  margin-bottom:2rem;
+}
+.chart-panel{
+  background:var(--paper);
+  padding:1.25rem;
+}
+.chart-title{
+  font-size:0.62rem;letter-spacing:0.14em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:1rem;
+  display:flex;align-items:center;gap:8px;
+}
+.chart-title::after{content:'';flex:1;height:1px;background:var(--border)}
+canvas.chart{width:100%!important;height:160px!important}
+
+/* ── Info strip ── */
+.info-strip{
+  background:var(--ink);
+  color:var(--paper);
+  padding:1.25rem 2.5rem;
+  display:flex;gap:3rem;align-items:center;
+  flex-wrap:wrap;
+}
+.info-item{display:flex;flex-direction:column;gap:2px}
+.info-item-label{font-size:0.58rem;letter-spacing:0.14em;text-transform:uppercase;color:rgba(245,243,238,0.4)}
+.info-item-val{font-family:var(--display);font-size:0.88rem;font-weight:600}
+.info-sep{width:1px;height:32px;background:rgba(245,243,238,0.15);flex-shrink:0}
+
+/* ── Download button ── */
+.dl-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:10px 20px;
+  border:1.5px solid rgba(245,243,238,0.4);
+  color:var(--paper);
+  background:transparent;
+  cursor:pointer;
+  font-family:var(--mono);
+  font-size:0.72rem;letter-spacing:0.08em;
+  text-transform:uppercase;
+  transition:all 0.15s;
+  margin-left:auto;
+}
+.dl-btn:hover{background:rgba(245,243,238,0.1);border-color:var(--paper)}
+.dl-btn:disabled{opacity:0.3;cursor:not-allowed}
+
+/* ── Animations ── */
+@keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.fade-in{animation:fadeIn 0.4s ease forwards}
+.fade-in-d1{animation-delay:0.05s;opacity:0}
+.fade-in-d2{animation-delay:0.12s;opacity:0}
+.fade-in-d3{animation-delay:0.2s;opacity:0}
+.fade-in-d4{animation-delay:0.28s;opacity:0}
+
+/* ── Demo image buttons ── */
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.demo-btn{
+  padding:7px 10px;
+  border:1.5px solid var(--border);
+  background:transparent;
+  cursor:pointer;
+  font-family:var(--mono);
+  font-size:0.68rem;letter-spacing:0.06em;
+  text-transform:uppercase;
+  color:var(--ink);
+  transition:all 0.15s;
+  text-align:center;
+}
+.demo-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ── Responsive ── */
+@media(max-width:900px){
+  .layout{grid-template-columns:1fr}
+  aside{border-right:none;border-bottom:2px solid var(--ink)}
+  .metrics-grid{grid-template-columns:1fr 1fr}
+  .img-compare-strip{grid-template-columns:1fr}
+  .img-panel{border-right:none;border-bottom:1.5px solid var(--border)}
+  .charts-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-block">
+    <div class="logo-sq">PCA</div>
+    <div class="logo-text">
+      <h1>Image Compressor</h1>
+      <p>Principal Component Analysis · SVD</p>
+    </div>
+  </div>
+  <div class="header-tag">Interactive Lab</div>
+</header>
+
+<div class="layout">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside>
+
+    <div class="aside-section">
+      <div class="section-eyebrow">01 — Upload Image</div>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <div class="upload-icon">↑</div>
+        <strong>Drop image here</strong>
+        <span>PNG · JPG · GIF · WebP</span>
+      </div>
+      <input type="file" id="fileInput" accept="image/*">
+
+      <div class="thumb-strip" id="thumbStrip" style="display:none">
+        <!-- thumbnails appear here -->
+      </div>
+    </div>
+
+    <div class="aside-section">
+      <div class="section-eyebrow">02 — Demo Images</div>
+      <div class="demo-grid">
+        <button class="demo-btn" onclick="loadDemo('gradient')">Gradient</button>
+        <button class="demo-btn" onclick="loadDemo('checkerboard')">Checker</button>
+        <button class="demo-btn" onclick="loadDemo('sinusoidal')">Sine Wave</button>
+        <button class="demo-btn" onclick="loadDemo('portrait')">Portrait</button>
+      </div>
+    </div>
+
+    <div class="aside-section">
+      <div class="section-eyebrow">03 — Components (k)</div>
+      <div class="slider-wrap">
+        <div class="slider-row">
+          <span class="slider-label">Principal components</span>
+          <span class="k-badge" id="kDisplay">20</span>
+        </div>
+        <input type="range" id="kSlider" min="1" max="128" value="20" step="1" oninput="onKChange(this.value)">
+        <div class="var-label">
+          <span>Variance retained</span>
+          <span id="varPct" style="color:var(--accent);font-weight:500">—</span>
+        </div>
+        <div class="var-bar-bg"><div class="var-bar-fill" id="varBar" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="aside-section">
+      <div class="section-eyebrow">04 — Run</div>
+      <button class="run-btn" id="runBtn" onclick="runPCA()" disabled>
+        <div class="spinner" id="spinner"></div>
+        <span class="btn-text">Compress Image</span>
+      </button>
+    </div>
+
+    <div class="aside-section" id="sideMetrics" style="display:none">
+      <div class="section-eyebrow">05 — Quick Stats</div>
+      <div class="mini-stats">
+        <div class="mini-stat">
+          <div class="mini-stat-label">PSNR</div>
+          <div class="mini-stat-val val-green" id="sm-psnr">—</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-label">SSIM</div>
+          <div class="mini-stat-val val-blue" id="sm-ssim">—</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-label">Ratio</div>
+          <div class="mini-stat-val val-gold" id="sm-ratio">—</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-label">MSE</div>
+          <div class="mini-stat-val val-red" id="sm-mse">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="prog-label" id="progLabel">Initialising…</div>
+      <div class="prog-bg"><div class="prog-fill" id="progFill"></div></div>
+    </div>
+
+  </aside>
+
+  <!-- ══ CONTENT ══ -->
+  <div class="content" id="contentArea">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-cross"></div>
+      <h2>No image loaded</h2>
+      <p>Upload a photo or select a demo image to begin PCA compression analysis.</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- Hidden working canvases -->
+<canvas id="origCanvas" style="display:none"></canvas>
+<canvas id="compCanvas" style="display:none"></canvas>
+
+<script>
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let origImageData = null;
+let compImageData = null;
+let singularVals  = [];
+let imgW = 0, imgH = 0;
+let history = [];   // {k, blob}
+let hasResult = false;
+
+// ══════════════════════════════════════════
+//  UPLOAD / DRAG-DROP
+// ══════════════════════════════════════════
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e=>{e.preventDefault();zone.classList.add('drag')});
+zone.addEventListener('dragleave', ()=>zone.classList.remove('drag'));
+zone.addEventListener('drop', e=>{
+  e.preventDefault();zone.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if(f) readFile(f);
+});
+document.getElementById('fileInput').addEventListener('change', e=>{
+  if(e.target.files[0]) readFile(e.target.files[0]);
+});
+
+function readFile(file){
+  const reader = new FileReader();
+  reader.onload = ev => loadImageSrc(ev.target.result, file.name);
+  reader.readAsDataURL(file);
+}
+
+function loadImageSrc(src, name='image'){
+  const img = new Image();
+  img.onload = ()=>{
+    // Scale down proportionally so longest side ≤ 512, preserving aspect ratio
+    const MAX = 512;
+    const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+    imgW = Math.round(img.width  * scale);
+    imgH = Math.round(img.height * scale);
+    const c = document.getElementById('origCanvas');
+    c.width = imgW; c.height = imgH;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, imgW, imgH);
+    origImageData = ctx.getImageData(0, 0, imgW, imgH);
+    singularVals = [];
+    document.getElementById('kSlider').max = Math.min(imgW, imgH, 128);
+    document.getElementById('runBtn').disabled = false;
+    history = [];
+    showImageReady(name);
+    addThumb(src, name);
+  };
+  img.src = src;
+}
+
+function addThumb(src, name){
+  const strip = document.getElementById('thumbStrip');
+  strip.style.display = 'flex';
+  const div = document.createElement('div');
+  div.className = 'thumb active';
+  div.innerHTML = `<img src="${src}" title="${name}">`;
+  // deactivate others
+  strip.querySelectorAll('.thumb').forEach(t=>t.classList.remove('active'));
+  strip.appendChild(div);
+}
+
+// ══════════════════════════════════════════
+//  DEMO GENERATORS
+// ══════════════════════════════════════════
+function loadDemo(type){
+  const size = 200;
+  const c = document.getElementById('origCanvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+  const id = ctx.createImageData(size,size);
+  const d = id.data;
+  for(let y=0;y<size;y++){
+    for(let x=0;x<size;x++){
+      const i=(y*size+x)*4;
+      let r=0,g=0,b=0;
+      const xn=x/size, yn=y/size;
+      if(type==='gradient'){
+        r=Math.round(xn*255); g=Math.round(yn*255); b=Math.round((1-xn)*255);
+      } else if(type==='checkerboard'){
+        const v=((Math.floor(x/25)+Math.floor(y/25))%2)*210+20;
+        r=g=b=v;
+      } else if(type==='sinusoidal'){
+        r=Math.round(Math.sin(xn*Math.PI*8)*127+128);
+        g=Math.round(Math.cos(yn*Math.PI*6)*127+128);
+        b=Math.round(Math.sin((xn+yn)*Math.PI*4)*127+128);
+      } else if(type==='portrait'){
+        const cx=size/2,cy=size/2;
+        const dist=Math.sqrt((x-cx)**2+(y-cy)**2);
+        const face=Math.max(0,200-dist*0.9+Math.sin(xn*10)*20);
+        r=Math.min(255,face); g=Math.min(255,face*0.85); b=Math.min(255,face*0.7);
+      }
+      d[i]=r;d[i+1]=g;d[i+2]=b;d[i+3]=255;
+    }
+  }
+  ctx.putImageData(id,0,0);
+  imgW=size;imgH=size;
+  origImageData=id;
+  singularVals=[];
+  document.getElementById('kSlider').max=Math.min(size,128);
+  document.getElementById('runBtn').disabled=false;
+  history=[];
+  showImageReady(type);
+  // make thumb from canvas
+  const src = c.toDataURL();
+  document.getElementById('thumbStrip').style.display='none';
+}
+
+// ══════════════════════════════════════════
+//  PCA  ALGORITHM  (SVD via power iteration)
+// ══════════════════════════════════════════
+function svdChannel(channel, k){
+  // channel is Float64Array [H*W], stored row-major
+  const H=imgH, W=imgW;
+  k=Math.min(k,H,W);
+
+  // Build H×W matrix, mean-center rows
+  const rowMeans = new Float64Array(H);
+  for(let i=0;i<H;i++){
+    let s=0;
+    for(let j=0;j<W;j++) s+=channel[i*W+j];
+    rowMeans[i]=s/W;
+  }
+  const X = new Float64Array(channel);
+  for(let i=0;i<H;i++)
+    for(let j=0;j<W;j++) X[i*W+j]-=rowMeans[i];
+
+  // --- Gram matrix approach: compute A = X * Xt  (H×H, manageable when H<W)
+  // If W > H use H×H gram, else W×W gram
+  const useH = H <= W;
+  const n = useH ? H : W;
+  const m = useH ? W : H;
+
+  // Build gram matrix n×n
+  const G = new Float64Array(n*n);
+  if(useH){
+    // G = X * Xt  (H×H)
+    for(let a=0;a<H;a++){
+      for(let b=a;b<H;b++){
+        let s=0;
+        for(let j=0;j<W;j++) s+=X[a*W+j]*X[b*W+j];
+        G[a*H+b]=G[b*H+a]=s;
+      }
+    }
+  } else {
+    // G = Xt * X  (W×W)
+    for(let a=0;a<W;a++){
+      for(let b=a;b<W;b++){
+        let s=0;
+        for(let i=0;i<H;i++) s+=X[i*W+a]*X[i*W+b];
+        G[a*W+b]=G[b*W+a]=s;
+      }
+    }
+  }
+
+  // Power iteration to get top-k eigenvectors of G
+  const vecs=[], vals=[];
+  const GDefl=new Float64Array(G);
+  for(let ei=0;ei<k;ei++){
+    let v=new Float64Array(n);
+    for(let j=0;j<n;j++) v[j]=Math.random()-0.5;
+    orthonorm(v,vecs);
+    for(let it=0;it<80;it++){
+      const nv=mvMul(GDefl,n,v);
+      for(let prev=0;prev<ei;prev++){
+        let dot=0;
+        for(let j=0;j<n;j++) dot+=nv[j]*vecs[prev][j];
+        for(let j=0;j<n;j++) nv[j]-=dot*vecs[prev][j];
+      }
+      normVec(nv);
+      v=nv;
+    }
+    const eigenval=rayleigh(GDefl,n,v);
+    vals.push(Math.max(0,eigenval));
+    vecs.push(v);
+  }
+
+  // Singular values = sqrt of eigenvalues
+  const singVals = vals.map(v=>Math.sqrt(v));
+  const totalVar = singVals.reduce((s,v)=>s+v*v,0)||1;
+  const varExp   = singVals.reduce((s,v)=>s+v*v,0)/totalVar;
+
+  // Reconstruct: if useH, eigvecs are left (row) singular vectors
+  // Ur (H×k), then Vr = Xt * Ur / sigma_r  → (W×k)
+  const recon = new Float64Array(H*W);
+
+  if(useH){
+    // Ur = vecs  (each vec is H-dim)
+    // Vr_j = X^T * u_r / sigma_r
+    for(let ei=0;ei<k;ei++){
+      if(singVals[ei]<1e-10) continue;
+      const u=vecs[ei];
+      // compute v_r = X^T u / sigma  (W-dim)
+      const vr=new Float64Array(W);
+      for(let j=0;j<W;j++){
+        let s=0;
+        for(let i=0;i<H;i++) s+=X[i*W+j]*u[i];
+        vr[j]=s/singVals[ei];
+      }
+      // outer product: u * sigma * vt  = sigma * u * vr^T
+      for(let i=0;i<H;i++){
+        for(let j=0;j<W;j++){
+          recon[i*W+j]+=singVals[ei]*u[i]*vr[j];
+        }
+      }
+    }
+  } else {
+    // eigvecs are right (column) singular vectors, W-dim
+    for(let ei=0;ei<k;ei++){
+      if(singVals[ei]<1e-10) continue;
+      const vr=vecs[ei];
+      // ur = X * vr / sigma  (H-dim)
+      const ur=new Float64Array(H);
+      for(let i=0;i<H;i++){
+        let s=0;
+        for(let j=0;j<W;j++) s+=X[i*W+j]*vr[j];
+        ur[i]=s/singVals[ei];
+      }
+      for(let i=0;i<H;i++){
+        for(let j=0;j<W;j++){
+          recon[i*W+j]+=singVals[ei]*ur[i]*vr[j];
+        }
+      }
+    }
+  }
+
+  // Add back row means + clamp
+  for(let i=0;i<H;i++)
+    for(let j=0;j<W;j++)
+      recon[i*W+j]=Math.max(0,Math.min(255,recon[i*W+j]+rowMeans[i]));
+
+  return {recon, singVals, varExp};
+}
+
+function mvMul(A,n,x){
+  const y=new Float64Array(n);
+  for(let i=0;i<n;i++){let s=0;for(let j=0;j<n;j++) s+=A[i*n+j]*x[j];y[i]=s;}
+  return y;
+}
+function normVec(v){
+  let n=0;for(let i=0;i<v.length;i++) n+=v[i]*v[i];
+  n=Math.sqrt(n)||1;for(let i=0;i<v.length;i++) v[i]/=n;
+}
+function orthonorm(v,prev){
+  for(const p of prev){let d=0;for(let i=0;i<v.length;i++) d+=v[i]*p[i];for(let i=0;i<v.length;i++) v[i]-=d*p[i];}
+  normVec(v);
+}
+function rayleigh(A,n,v){
+  const Av=mvMul(A,n,v);let s=0;for(let i=0;i<n;i++) s+=v[i]*Av[i];return s;
+}
+
+// ══════════════════════════════════════════
+//  METRICS
+// ══════════════════════════════════════════
+function computePSNR(orig, comp, n){
+  let mse=0;
+  for(let i=0;i<n;i++){
+    const d=orig[i]-comp[i];
+    mse+=d*d;
+  }
+  mse/=n;
+  const psnr=mse===0?Infinity:10*Math.log10(255*255/mse);
+  return {mse, psnr};
+}
+function computeSSIM(orig, comp, W, H){
+  // channel-wise simplified SSIM
+  const ssims=[];
+  for(let ch=0;ch<3;ch++){
+    const a=new Float64Array(W*H), b=new Float64Array(W*H);
+    for(let i=0;i<W*H;i++){a[i]=orig[i*4+ch];b[i]=comp[i*4+ch];}
+    const mu1=a.reduce((s,v)=>s+v,0)/(W*H);
+    const mu2=b.reduce((s,v)=>s+v,0)/(W*H);
+    let s1=0,s2=0,cov=0;
+    for(let i=0;i<W*H;i++){s1+=(a[i]-mu1)**2;s2+=(b[i]-mu2)**2;cov+=(a[i]-mu1)*(b[i]-mu2);}
+    s1/=W*H;s2/=W*H;cov/=W*H;
+    const C1=6.5025,C2=58.5225;
+    const num=(2*mu1*mu2+C1)*(2*cov+C2);
+    const den=(mu1**2+mu2**2+C1)*(s1+s2+C2);
+    ssims.push(num/(den+1e-10));
+  }
+  return ssims.reduce((s,v)=>s+v,0)/3;
+}
+
+// ══════════════════════════════════════════
+//  MAIN RUN
+// ══════════════════════════════════════════
+async function runPCA(){
+  if(!origImageData) return;
+  const k=parseInt(document.getElementById('kSlider').value);
+
+  // UI: loading state
+  const btn=document.getElementById('runBtn');
+  btn.disabled=true; btn.classList.add('loading');
+  setProgress(true,'Extracting colour channels…',5);
+  await tick();
+
+  const compC=document.getElementById('compCanvas');
+  compC.width=imgW; compC.height=imgH;
+  const ctx=compC.getContext('2d');
+  const outId=ctx.createImageData(imgW,imgH);
+  const allSVs=[];
+
+  for(let ch=0;ch<3;ch++){
+    setProgress(true,`Processing ${['R','G','B'][ch]} channel via SVD…`, 10+ch*25);
+    await tick();
+    const chData=new Float64Array(imgW*imgH);
+    for(let i=0;i<imgW*imgH;i++) chData[i]=origImageData.data[i*4+ch];
+    const {recon,singVals}=svdChannel(chData,k);
+    allSVs.push(singVals);
+    for(let i=0;i<imgW*imgH;i++) outId.data[i*4+ch]=Math.round(recon[i]);
+  }
+  for(let i=0;i<imgW*imgH;i++) outId.data[i*4+3]=255;
+  ctx.putImageData(outId,0,0);
+  compImageData=outId;
+  singularVals=allSVs;
+
+  setProgress(true,'Computing quality metrics…',88);
+  await tick();
+
+  // metrics
+  const n3=imgW*imgH*3;
+  let mse3=0;
+  for(let i=0;i<imgW*imgH;i++){
+    for(let ch=0;ch<3;ch++){
+      const d=origImageData.data[i*4+ch]-compImageData.data[i*4+ch];
+      mse3+=d*d;
+    }
+  }
+  const mse=mse3/(n3);
+  const psnr=mse===0?Infinity:10*Math.log10(255*255/mse);
+  const ssim=computeSSIM(origImageData.data, compImageData.data, imgW, imgH);
+  const origSz=imgW*imgH*3;
+  const compSz=k*(imgW+imgH+1)*3;
+  const ratio=origSz/compSz;
+
+  // variance
+  let topVar=0,totVar=0;
+  for(const sv of allSVs){ for(const v of sv) totVar+=v*v; }
+  for(const sv of allSVs){ for(let i=0;i<k&&i<sv.length;i++) topVar+=sv[i]*sv[i]; }
+  const varPct=Math.min(100,topVar/totVar*100);
+
+  setProgress(false);
+  btn.disabled=false; btn.classList.remove('loading');
+  hasResult=true;
+
+  updateVarianceDisplay(varPct);
+  updateSideMetrics(psnr,ssim,ratio,mse);
+  renderResults(k,mse,psnr,ssim,ratio,varPct);
+}
+
+function tick(){return new Promise(r=>setTimeout(r,10))}
+
+function setProgress(show,msg='',pct=0){
+  const w=document.getElementById('progressWrap');
+  w.classList.toggle('show',show);
+  document.getElementById('progLabel').textContent=msg;
+  document.getElementById('progFill').style.width=pct+'%';
+}
+
+// ══════════════════════════════════════════
+//  UI UPDATERS
+// ══════════════════════════════════════════
+function onKChange(val){
+  document.getElementById('kDisplay').textContent=val;
+  if(singularVals.length){
+    let topVar=0,totVar=0;
+    const kv=parseInt(val);
+    for(const sv of singularVals){ for(const v of sv) totVar+=v*v; }
+    for(const sv of singularVals){ for(let i=0;i<kv&&i<sv.length;i++) topVar+=sv[i]*sv[i]; }
+    updateVarianceDisplay(Math.min(100,topVar/totVar*100));
+  }
+}
+function updateVarianceDisplay(pct){
+  document.getElementById('varPct').textContent=pct.toFixed(1)+'%';
+  document.getElementById('varBar').style.width=pct+'%';
+}
+function updateSideMetrics(psnr,ssim,ratio,mse){
+  document.getElementById('sideMetrics').style.display='block';
+  document.getElementById('sm-psnr').textContent=isFinite(psnr)?psnr.toFixed(1)+'dB':'∞';
+  document.getElementById('sm-ssim').textContent=ssim.toFixed(4);
+  document.getElementById('sm-ratio').textContent=ratio.toFixed(2)+'×';
+  document.getElementById('sm-mse').textContent=mse.toFixed(2);
+}
+
+// ══════════════════════════════════════════
+//  RENDER RESULTS
+// ══════════════════════════════════════════
+function showImageReady(name){
+  const area=document.getElementById('contentArea');
+  area.innerHTML=`
+    <div class="empty-state fade-in">
+      <div style="font-family:var(--display);font-size:1rem;font-weight:700;color:var(--muted)">
+        Image loaded: <span style="color:var(--ink)">${name}</span>
+      </div>
+      <p>${imgW}×${imgH} px · Ready to compress</p>
+      <p style="color:var(--accent);font-size:0.72rem">Set k with the slider and press Compress</p>
+    </div>`;
+}
+
+function renderResults(k,mse,psnr,ssim,ratio,varPct){
+  const area=document.getElementById('contentArea');
+
+  // Verdict text
+  const psnrVerdict = psnr>40?'Excellent — virtually lossless':psnr>35?'Very good — barely noticeable':psnr>28?'Good — minor artefacts':psnr>22?'Acceptable — visible loss':'Heavy compression — significant loss';
+  const ssimVerdict = ssim>0.97?'Near-perfect structure':ssim>0.92?'High structural similarity':ssim>0.85?'Good similarity':ssim>0.7?'Moderate similarity':'Notable structural change';
+  const ratioVerdict= ratio>10?'Extreme compression':ratio>5?'Strong compression':ratio>2?'Moderate compression':'Low compression';
+  const psnrPct     = Math.min(100,Math.max(0,(psnr-15)/35*100));
+  const ssimPct     = Math.min(100,ssim*100);
+  const ratioPct    = Math.min(100,ratio/15*100);
+  const msePct      = Math.max(0,100-Math.min(100,mse/200*100));
+
+  area.innerHTML=`
+  <div class="result-area">
+
+    <!-- Image comparison -->
+    <div class="img-compare-strip fade-in">
+      <div class="img-panel">
+        <div class="img-panel-header">
+          <span class="img-panel-title">Original</span>
+          <span class="img-tag tag-orig">Source</span>
+        </div>
+        <div class="img-canvas-wrap">
+          <canvas id="dispOrig"></canvas>
+        </div>
+      </div>
+      <div class="img-panel">
+        <div class="img-panel-header">
+          <span class="img-panel-title">Compressed · k=${k}</span>
+          <span class="img-tag tag-comp">PCA/SVD</span>
+        </div>
+        <div class="img-canvas-wrap">
+          <canvas id="dispComp"></canvas>
+        </div>
+      </div>
+      <div class="img-panel">
+        <div class="img-panel-header">
+          <span class="img-panel-title">Difference ×8</span>
+          <span class="img-tag tag-diff">Error Map</span>
+        </div>
+        <div class="img-canvas-wrap">
+          <canvas id="dispDiff"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metrics dashboard -->
+    <div class="metrics-dashboard fade-in fade-in-d1">
+      <div class="metrics-headline">Evaluation Metrics</div>
+      <div class="metrics-sub">k = ${k} components · ${imgW}×${imgH} image · ${varPct.toFixed(1)}% variance retained</div>
+
+      <div class="metrics-grid">
+
+        <div class="metric-card mc-psnr">
+          <div class="metric-label">PSNR</div>
+          <div class="metric-value mv-green">${isFinite(psnr)?psnr.toFixed(2):'∞'}</div>
+          <div class="metric-unit">decibels (dB)</div>
+          <div class="metric-bar-bg"><div class="metric-bar-fill mfill-green" style="width:${psnrPct.toFixed(1)}%"></div></div>
+          <div class="metric-verdict">${psnrVerdict}</div>
+        </div>
+
+        <div class="metric-card mc-ssim">
+          <div class="metric-label">SSIM</div>
+          <div class="metric-value mv-blue">${ssim.toFixed(4)}</div>
+          <div class="metric-unit">structural similarity</div>
+          <div class="metric-bar-bg"><div class="metric-bar-fill mfill-blue" style="width:${ssimPct.toFixed(1)}%"></div></div>
+          <div class="metric-verdict">${ssimVerdict}</div>
+        </div>
+
+        <div class="metric-card mc-ratio">
+          <div class="metric-label">Compression ratio</div>
+          <div class="metric-value mv-gold">${ratio.toFixed(2)}×</div>
+          <div class="metric-unit">original / compressed size</div>
+          <div class="metric-bar-bg"><div class="metric-bar-fill mfill-gold" style="width:${ratioPct.toFixed(1)}%"></div></div>
+          <div class="metric-verdict">${ratioVerdict}</div>
+        </div>
+
+        <div class="metric-card mc-mse">
+          <div class="metric-label">MSE</div>
+          <div class="metric-value mv-red">${mse.toFixed(2)}</div>
+          <div class="metric-unit">mean squared error</div>
+          <div class="metric-bar-bg"><div class="metric-bar-fill mfill-red" style="width:${msePct.toFixed(1)}%"></div></div>
+          <div class="metric-verdict">Lower = better reconstruction</div>
+        </div>
+
+      </div>
+
+      <!-- Charts -->
+      <div class="charts-row fade-in fade-in-d2">
+        <div class="chart-panel">
+          <div class="chart-title">Singular value spectrum (R channel)</div>
+          <canvas class="chart" id="screeChart"></canvas>
+        </div>
+        <div class="chart-panel">
+          <div class="chart-title">Cumulative variance explained</div>
+          <canvas class="chart" id="cumVarChart"></canvas>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Info / download strip -->
+    <div class="info-strip fade-in fade-in-d4">
+      <div class="info-item">
+        <span class="info-item-label">Image size</span>
+        <span class="info-item-val">${imgW} × ${imgH} px</span>
+      </div>
+      <div class="info-sep"></div>
+      <div class="info-item">
+        <span class="info-item-label">Original values</span>
+        <span class="info-item-val">${(imgW*imgH*3).toLocaleString()}</span>
+      </div>
+      <div class="info-sep"></div>
+      <div class="info-item">
+        <span class="info-item-label">Compressed values</span>
+        <span class="info-item-val">${(k*(imgW+imgH+1)*3).toLocaleString()}</span>
+      </div>
+      <div class="info-sep"></div>
+      <div class="info-item">
+        <span class="info-item-label">Components k</span>
+        <span class="info-item-val">${k} / ${Math.min(imgW,imgH)}</span>
+      </div>
+      <div class="info-sep"></div>
+      <div class="info-item">
+        <span class="info-item-label">Variance retained</span>
+        <span class="info-item-val">${varPct.toFixed(1)}%</span>
+      </div>
+      <button class="dl-btn" onclick="downloadCompressed()">↓ Download compressed</button>
+    </div>
+
+  </div>`;
+
+  // Draw original
+  const dOrig=document.getElementById('dispOrig');
+  dOrig.width=imgW;dOrig.height=imgH;
+  dOrig.getContext('2d').putImageData(origImageData,0,0);
+
+  // Draw compressed
+  const dComp=document.getElementById('dispComp');
+  dComp.width=imgW;dComp.height=imgH;
+  dComp.getContext('2d').putImageData(compImageData,0,0);
+
+  // Draw diff ×8
+  const dDiff=document.getElementById('dispDiff');
+  dDiff.width=imgW;dDiff.height=imgH;
+  const dCtx=dDiff.getContext('2d');
+  const dId=dCtx.createImageData(imgW,imgH);
+  for(let i=0;i<imgW*imgH;i++){
+    for(let ch=0;ch<3;ch++){
+      dId.data[i*4+ch]=Math.min(255,Math.abs(origImageData.data[i*4+ch]-compImageData.data[i*4+ch])*8);
+    }
+    dId.data[i*4+3]=255;
+  }
+  dCtx.putImageData(dId,0,0);
+
+  // Draw charts
+  drawCharts(k);
+}
+
+// ══════════════════════════════════════════
+//  CHARTS  (pure canvas — no lib needed)
+// ══════════════════════════════════════════
+function drawCharts(k){
+  drawScree(k);
+  drawCumVar(k);
+}
+
+function drawScree(k){
+  const canvas=document.getElementById('screeChart');
+  if(!canvas||!singularVals.length) return;
+  const svs=singularVals[0]; // R channel
+  const dpr=window.devicePixelRatio||1;
+  const W=canvas.clientWidth||320, H=canvas.clientHeight||160;
+  canvas.width=W*dpr; canvas.height=H*dpr;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+
+  const top=Math.min(50,svs.length);
+  const maxV=svs[0]||1;
+  const pad={l:32,r:16,t:12,b:28};
+  const cW=W-pad.l-pad.r, cH=H-pad.t-pad.b;
+  const bW=Math.max(2,(cW/top)-1.5);
+  const kv=Math.min(k,top);
+
+  // Gridlines
+  ctx.strokeStyle='#e5e0d5'; ctx.lineWidth=0.5;
+  for(let g=0;g<=4;g++){
+    const y=pad.t+cH*(1-g/4);
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+  }
+
+  // Bars
+  for(let i=0;i<top;i++){
+    const bH=(svs[i]/maxV)*cH;
+    const x=pad.l+i*(cW/top);
+    const y=pad.t+cH-bH;
+    ctx.fillStyle=i<kv?'#1a6bc8':'#c8c0b0';
+    ctx.fillRect(x,y,bW,bH);
+  }
+
+  // k line
+  if(kv<=top){
+    const kx=pad.l+kv*(cW/top);
+    ctx.strokeStyle='#c8401a'; ctx.lineWidth=1.5; ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(kx,pad.t);ctx.lineTo(kx,pad.t+cH);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#c8401a';ctx.font='500 10px DM Mono,monospace';
+    ctx.fillText('k='+k, kx+4, pad.t+14);
+  }
+
+  // Axes labels
+  ctx.fillStyle='#7a7060';ctx.font='10px DM Mono,monospace';
+  ctx.textAlign='right';
+  ctx.fillText(Math.round(maxV),pad.l-4,pad.t+10);
+  ctx.fillText('0',pad.l-4,pad.t+cH+4);
+  ctx.textAlign='center';
+  ctx.fillText('1',pad.l,pad.t+cH+14);
+  ctx.fillText(top,pad.l+cW,pad.t+cH+14);
+  ctx.fillText('component index',pad.l+cW/2,H-4);
+}
+
+function drawCumVar(k){
+  const canvas=document.getElementById('cumVarChart');
+  if(!canvas||!singularVals.length) return;
+  const dpr=window.devicePixelRatio||1;
+  const W=canvas.clientWidth||320, H=canvas.clientHeight||160;
+  canvas.width=W*dpr; canvas.height=H*dpr;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+
+  const colors=['#c8401a','#1a6bc8','#1a8c5a'];
+  const names=['R','G','B'];
+  const pad={l:36,r:16,t:12,b:28};
+  const cW=W-pad.l-pad.r, cH=H-pad.t-pad.b;
+  const top=Math.min(60,singularVals[0].length);
+
+  // Gridlines + 95% line
+  ctx.strokeStyle='#e5e0d5';ctx.lineWidth=0.5;
+  for(let g=0;g<=4;g++){
+    const y=pad.t+cH*(1-g/4);
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+  }
+  ctx.strokeStyle='#b8860b';ctx.lineWidth=0.8;ctx.setLineDash([4,3]);
+  const y95=pad.t+cH*0.05;
+  ctx.beginPath();ctx.moveTo(pad.l,y95);ctx.lineTo(W-pad.r,y95);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#b8860b';ctx.font='9px DM Mono,monospace';ctx.textAlign='left';
+  ctx.fillText('95%',W-pad.r-20,y95-3);
+
+  // Curves
+  for(let ci=0;ci<3;ci++){
+    const svs=singularVals[ci];
+    const totSq=svs.reduce((s,v)=>s+v*v,0)||1;
+    ctx.strokeStyle=colors[ci]; ctx.lineWidth=1.8;
+    ctx.beginPath();
+    let cumSq=0;
+    for(let i=0;i<top;i++){
+      cumSq+=svs[i]*svs[i];
+      const x=pad.l+(i/(top-1))*cW;
+      const y=pad.t+cH*(1-cumSq/totSq);
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // Legend dot
+    const lx=pad.l+4+(ci*52);
+    ctx.fillStyle=colors[ci];
+    ctx.fillRect(lx,pad.t+2,12,3);
+    ctx.fillStyle='#7a7060';ctx.font='9px DM Mono,monospace';ctx.textAlign='left';
+    ctx.fillText(names[ci],lx+15,pad.t+7);
+  }
+
+  // k line
+  const kv=Math.min(k,top);
+  const kx=pad.l+(kv/(top-1))*cW;
+  ctx.strokeStyle='#0a0a0f';ctx.lineWidth=1;ctx.setLineDash([2,3]);
+  ctx.beginPath();ctx.moveTo(kx,pad.t);ctx.lineTo(kx,pad.t+cH);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Axes
+  ctx.fillStyle='#7a7060';ctx.font='10px DM Mono,monospace';
+  ctx.textAlign='right';
+  ctx.fillText('100%',pad.l-3,pad.t+10);
+  ctx.fillText('0%',pad.l-3,pad.t+cH+4);
+  ctx.textAlign='center';
+  ctx.fillText('k (components)',pad.l+cW/2,H-4);
+}
+
+// ══════════════════════════════════════════
+//  DOWNLOAD
+// ══════════════════════════════════════════
+function downloadCompressed(){
+  const c=document.getElementById('compCanvas');
+  const a=document.createElement('a');
+  const k=document.getElementById('kSlider').value;
+  a.download=`pca_compressed_k${k}.png`;
+  a.href=c.toDataURL('image/png');
+  a.click();
+}
+</script>
+</body>
+</html>

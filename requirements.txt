@@ -1,0 +1,7 @@
+numpy>=1.21
+Pillow>=9.0
+matplotlib>=3.5
+jupyter>=1.0
+notebook>=6.4
+scipy>=1.7
+scikit-image>=0.19
